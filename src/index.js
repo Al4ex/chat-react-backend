@@ -80,7 +80,7 @@ io.on("connection", async (socket) => {
   });
 });
 
-app.set("port", 5000 || process.env.PORT);
+app.set("port", process.env.PORT || 5000);
 connectDB();
 // app.use(upload.none())
 
