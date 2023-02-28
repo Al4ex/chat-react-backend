@@ -13,6 +13,10 @@ const UserSchema = new Schema(
     facebook: { type: String, default: "" },
     twitter: { type: String, default: "" },
     state: { type: Boolean, default: false },
+    contactos: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Users'
+    }],
   },
   { timestamps: true }
 );

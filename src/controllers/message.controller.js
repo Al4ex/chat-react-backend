@@ -23,7 +23,8 @@ const getChat = async (req, res) => {
       { from: id, to: messageFrom },
       { from: messageFrom, to: id },
     ],
-  }).sort({ createdAt: "desc" });
+  }).sort({ createAt: "asc" });
+  console.log(listMessages);
   res.status(200).send({ ok: true, userId: id, messages: listMessages });
 };
 
@@ -32,6 +33,7 @@ const updateMessage = async (req, res) => {
   // console.log(to, from, "alex");
   try {
     const updateTo = await Message.updateMany({ to, from }, { status: "read" });
+    return updateTo
   } catch (error) {
     console.log(error);
   }

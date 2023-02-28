@@ -99,68 +99,7 @@ const getUser = async (req, res) => {
 };
 const getUsers = async (req, res) => {
   let usuario = mongoose.Types.ObjectId("63043bb710b7408efd9f277b");
-  // try {
-  // {
-  // const users = await Contact.aggregate([
-  //   // {
-  //   //   $lookup: {
-  //   //     from: "Contacts",
-  //   //     localField: "_id",
-  //   //     foreignField: "owner",
-  //   //     as: "contact",
-  //   //   },
-  //   // },
-  //   // {
-  //   //   $unwind: "$contact",
-  //   // },
-
-  //   {
-  //     $lookup: {
-  //       from: "Users",
-  //       let: {
-  //         contact: "$contact",
-  //         owner: "$owner",
-  //       },
-  //       pipeline: [
-  //         {
-  //           $match: {
-  //             $expr: {
-  //               $or: [{ $eq: ["$_id", "$$contact"] }],
-  //             },
-  //           },
-  //         },
-  //         { $sort: { createAt: -1 } },
-  //       ],
-  //       as: "contacto",
-  //     },
-  //   },
-  //   { $unwind: "$contacto" },
-  //   {
-  //     $lookup: {
-  //       from: "messages",
-  //       let: {
-  //         uid: "$owner",
-  //       },
-  //       pipeline: [
-  //         {
-  //           $match: {
-  //             $expr: {
-  //               $or: [{ $eq: ["$to", "$$uid"] }, { $eq: ["$from", "$$uid"] }],
-  //             },
-  //           },
-  //         },
-  //         { $sort: { createAt: -1 } }, // add sort if needed (for example, if you want first 100 comments by creation date)
-  //         { $limit: 1 },
-  //       ],
-  //       as: "final",
-  //     },
-  //   },
-  // ]).sort("-updatedAt");
-  // const users2 = await Message.updateMany(
-  //   { status: "unread" },
-  //   { $set: { status: "read" } }
-  // );
-  // console.log(users2);
+  
   const users = await User.aggregate([
     // {
     //   $lookup: {
@@ -308,6 +247,40 @@ const getImage = async (req, res) => {
     res.status(404).sendFile(path.resolve(path_img));
   }
 };
+const addContact = async (req, res) => {
+  const correoUsuarioA = req.body.user;
+  const correoUsuarioB = req.body.contact;
+  if (correoUsuarioA === correoUsuarioB) {
+    return res.status(400).json({ message: 'No te puedes añadir a ti mismo' });
+  }
+  try {
+    const [usuarioA, usuarioB] = await Promise.all([
+      User.findOne({ email: correoUsuarioA }),
+      User.findOne({ email: correoUsuarioB })
+    ]);
+
+    if (!usuarioA || !usuarioB) {
+      return res.status(404).json({ message: 'No se encontró al usuario' });
+    }
+
+    if (usuarioB.contactos.includes(usuarioA._id) || usuarioA.contactos.includes(usuarioB._id)) {
+      return res.status(409).json({ message: 'El usuario ya se ha añadido' });
+    }
+    usuarioB.contactos.push(usuarioA._id);
+    usuarioA.contactos.push(usuarioB._id);
+    
+    
+    const [usuarioBActualizado, usuarioAActualizado] = await Promise.all([
+      User.findByIdAndUpdate(usuarioB._id, usuarioB),
+      User.findByIdAndUpdate(usuarioA._id, usuarioA)
+    ]);
+    
+    return res.status(200).json({ message: "Añadido con exito", success: "true" });
+  } catch (error) {
+    console.error('Error al conectar usuarios:', error.message);
+    return res.status(500).json({ message: 'Error al conectar usuarios' });
+  }
+};
 
 const updateInfo = async (req, res) => {
   let { id } = req.params;
@@ -413,4 +386,5 @@ export {
   updateImage,
   getImage,
   updateInfo,
+  addContact
 };

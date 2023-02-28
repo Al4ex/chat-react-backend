@@ -52,7 +52,7 @@ io.on("connection", async (socket) => {
     // console.log(payload);
     io.to(payload.to).emit("message-personal", msg);
     io.to(payload.from).emit("message-personal", msg);
-    io.emit("list-users", await getUsers());
+    io.emit("list-users", await getUsers(id));
   });
 
   socket.on('focus', async (focused) => {
@@ -61,12 +61,12 @@ io.on("connection", async (socket) => {
 
   socket.on("read-messages", async (data) => {
     const update = await updateMessage(data);
-    // console.log(update);
-    io.emit("list-users", await getUsers());
+    console.log(update);
+    io.emit("list-users", await getUsers(id));
   });
 
   // emitir usuarios conectados
-  io.emit("list-users", await getUsers());
+  io.emit("list-users", await getUsers(id));
 
   // TODO: SABER QUE USARIO ESTA ACTIVO
   //EMITOIR TODOS LOS USUARIOS CONECTADOS
@@ -76,7 +76,7 @@ io.on("connection", async (socket) => {
   socket.on("disconnect", async () => {
     console.log("cliente desconectado");
     await userDisconnect(id);
-    io.emit("list-users", await getUsers());
+    io.emit("list-users", await getUsers(id));
   });
 });
 

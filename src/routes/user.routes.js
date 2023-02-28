@@ -11,6 +11,7 @@ import {
   updateImage,
   getImage,
   updateInfo,
+  addContact
 } from "../controllers/user.controller";
 import { check } from "express-validator";
 import { validarCampos } from "../middlewares/validar-campos";
@@ -55,6 +56,7 @@ router.get("/renewToken", [validarJWT], reNew);
 
 router.get("/user/:id", [validarJWT], getUser);
 router.get("/users", getUsers);
+router.post("/contact",[validarJWT], addContact);
 router.put("/users/desactivar/:id", desState);
 router.put("/users/edit/image/:id", upload, updateImage);
 router.get("/users/image/:img", getImage);
