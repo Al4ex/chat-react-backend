@@ -3,8 +3,7 @@ import path from "path";
 import fs from "fs-extra";
 import { createToken } from "../helpers/jwt";
 import User from "../models/user";
-import Contact from "../models/Contacts";
-import Message from "../models/Message";
+
 
 // registrar usuario
 const signIn = async (req, res) => {
@@ -16,59 +15,58 @@ const signIn = async (req, res) => {
     password,
   });
 
+  const admin = await User.findOne({ email: 'alexandercruzaragon@gmail.com' });
+  if (admin) {
+    user.contactos.push(admin._id);
+  }
   if (!password) {
-    // user.encryptPassword(password)
-    res.status(500).send({ message: "Ingrese la contraseña" });
+    res.status(400).send({ message: "Ingrese la contraseña" });
   } else if (!email) {
-    res.status(500).send({ message: "Ingrese su correo" });
+    res.status(400).send({ message: "Ingrese su correo" });
   } else if (!username) {
-    res.status(500).send({ message: "Ingrese su Nombre de usuario" });
+    res.status(400).send({ message: "Ingrese su nombre de usuario" });
   } else {
-    const findUser = await User.findOne({ email });
+    try {
+      const findUser = await User.findOne({ email });
 
-    if (findUser) {
-      res.status(400).send({ ok: false, message: "El correo ya existe" });
-    } else {
-      user.password = await user.encryptPassword(password);
-      const response = await user.save();
-      res.status(200).send({ ok: true, jwt: createToken(user), response });
+      if (findUser) {
+        res.status(400).send({ message: "El correo ya existe" });
+      } else {
+        user.password = await user.encryptPassword(password);
+        const response = await user.save();
+        await User.findOneAndUpdate(
+          { email: process.env.EMAIL },
+          { $push: { contactos: user._id } },
+          { new: true }
+        );
+        res.status(201).send({ ok: true, jwt: createToken(user), response });
+      }
+    } catch (error) {
+      res.status(500).send({ message: error.message });
     }
   }
 };
 // loggear usuario
 const login = async (req, res) => {
   const { email, password, token } = req.body;
+
   try {
     const user = await User.findOne({ email });
-    // Validar usuario
     if (!user) {
-      return res
-        .status(404)
-        .send({ ok: false, message: "El correo no existe" });
-    }
-
-    // comparar contraseña
-    const match = await user.comparePassword(password);
-    if (!match) {
-      return res
-        .status(401)
-        .send({ ok: false, message: "Contraseña invalida" });
-    }
-
-    if (token) {
-      res.status(200).send({
-        ok: true,
-        jwt: createToken(user),
-        message: "with token",
-        user,
-      });
+      res.status(404).send({ message: "El correo no existe" });
     } else {
-      res
-        .status(200)
-        .send({ ok: true, jwt: createToken(user), message: "sin token", user });
+      const match = await user.comparePassword(password);
+      if (!match) {
+        res.status(401).send({ message: "Contraseña invalida" });
+      } else {
+        const jwt = createToken(user);
+        const message = token ? "Con token" : "Sin token";
+        console.log(jwt);
+        res.status(200).send({ ok: true, jwt, message, user });
+      }
     }
   } catch (error) {
-    res.status(500).send({ ok: false, message: error });
+    res.status(500).send({ message: error.message });
   }
 };
 

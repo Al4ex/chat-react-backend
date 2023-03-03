@@ -16,8 +16,10 @@ import {
 } from "./controllers/socket.controller";
 import { sendMessage, updateMessage } from "./controllers/message.controller";
 import morgan from "morgan";
+import { createUserAdmin } from "./script/myuser";
 
 const app = express();
+
 
 // Middlewares
 app.use(
@@ -27,66 +29,82 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(morgan())
-//http server
-const server = http.createServer(app);
-// creacion de socket.io
-const io = new Server(server, { cors: { origin: "*" } });
 
-io.on("connection", async (socket) => {
-  //TODO: validar jwt
-  // si el token no es valido desconectar
-  const [valid, id] = checkToken(socket.handshake.query["x-token"]);
-  if (!valid) {
-    console.log("socket no identificado");
-    return socket.disconnect();
-  }
-  await userConnect(id);
-
-  // uNIRME A UNA SALA ESPECIFICA
-  socket.join(id);
-  //ESCUCHAR CIUANDO EL CLIENTE ESCRIBE UN MENSAJE
-  socket.on("message-personal", async (payload) => {
-
-    const msg = await sendMessage(payload);
-    // console.log(payload);
-    io.to(payload.to).emit("message-personal", msg);
-    io.to(payload.from).emit("message-personal", msg);
-    io.emit("list-users", await getUsers(id));
-  });
-
-  socket.on('focus', async (focused) => {
-    socket.emit("focused", focused);
-  })
-
-  socket.on("read-messages", async (data) => {
-    const update = await updateMessage(data);
-    console.log(update);
-    io.emit("list-users", await getUsers(id));
-  });
-
-  // emitir usuarios conectados
-  io.emit("list-users", await getUsers(id));
-
-  // TODO: SABER QUE USARIO ESTA ACTIVO
-  //EMITOIR TODOS LOS USUARIOS CONECTADOS
-
-  //Disconnect
-  // marcar en bd que se desconecto
-  socket.on("disconnect", async () => {
-    console.log("cliente desconectado");
-    await userDisconnect(id);
-    io.emit("list-users", await getUsers(id));
-  });
-});
-
-app.set("port", process.env.PORT || 5000);
-connectDB();
-// app.use(upload.none())
-
+// Routes
 app.use("/api", userRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/contact", contactRoutes);
 
-server.listen(app.get("port"));
-console.log(`port: `, clc.yellow.bold(process.env.URILOCAL + app.get("port")));
+// HTTP server
+const server = http.createServer(app);
+
+// Socket.IO server
+const io = new Server(server, { cors: { origin: "*" } });
+
+// Socket.IO logic
+io.on("connection", async (socket) => {
+  try {
+    // Validate JWT
+    const [valid, id] = checkToken(socket.handshake.query["x-token"]);
+    if (!valid) {
+      console.log("Unidentified socket");
+      return socket.disconnect();
+    }
+
+    // User connect
+    await userConnect(id);
+
+    // Join a specific room
+    socket.join(id);
+
+    // Listen for personal messages
+    socket.on("message-personal", async (payload) => {
+      const msg = await sendMessage(payload);
+      io.to(payload.to).emit("message-personal", msg);
+      io.to(payload.from).emit("message-personal", msg);
+      io.emit("list-users", await getUsers(id));
+    });
+
+    // Listen for focus events
+    socket.on("focus", async (focused) => {
+      socket.emit("focused", focused);
+    });
+
+    // Listen for read messages
+    socket.on("read-messages", async (data) => {
+      const update = await updateMessage(data);
+      console.log(update);
+      io.emit("list-users", await getUsers(id));
+    });
+
+    // List connected users
+    socket.on("list-users", async () => {
+      io.emit("list-users", await getUsers(id));
+    });
+
+    // Emit all connected users
+    io.emit("list-users", await getUsers(id));
+
+    // Disconnect
+    socket.on("disconnect", async () => {
+      console.log("Client disconnected");
+      await userDisconnect(id);
+      io.emit("list-users", await getUsers(id));
+    });
+  } catch (err) {
+    console.error(err);
+    socket.disconnect();
+  }
+});
+
+// Set port
+app.set("port", process.env.PORT || 5000);
+
+// Connect to database
+connectDB();
+createUserAdmin()
+
+// Start server
+server.listen(app.get("port"), () => {
+  console.log(`Server running on port: ${clc.yellow.bold(process.env.URILOCAL + app.get("port"))}`);
+});

@@ -12,93 +12,113 @@ const userConnect = async (uid) => {
 };
 
 const userDisconnect = async (uid) => {
+  console.log('llega');
   const userFind = await User.findById(uid);
   userFind.state = false;
+  userFind.ultimaConexion = new Date();
   await userFind.save();
 
   return userFind;
 };
 
-const getUsers = async (id) => {
+const getUsers = async () => {
+  try {
+    const users = await User.find(); // Obtenemos todos los usuarios
 
-    try {
-      let userId = mongoose.Types.ObjectId(id);
-      const user = await User.findById(userId);
-
-      const result = await User.aggregate([
-        // Buscamos los contactos del usuario
-        { $match: { _id: { $in: user.contactos } } },
-      
-        // Unimos la colección de mensajes
-        {
-          $lookup: {
-            from: 'messages',
-            let: { contacto_id: '$_id', userId },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
+    const result = await User.aggregate([
+      // Buscamos los contactos de todos los usuarios
+      { $match: { _id: { $in: users.map(user => user._id) } } },
+      // Buscamos los documentos de contacto
+      {
+        $lookup: {
+          from: 'Users',
+          localField: 'contactos',
+          foreignField: '_id',
+          as: 'contactos'
+        }
+      },
+      // Buscamos el último mensaje con cada contacto
+      {
+        $unwind: '$contactos'
+      },
+      {
+        $lookup: {
+          from: 'messages',
+          let: { usuarioId: '$_id', contactoId: '$contactos._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$from', '$$usuarioId'] },
+                    { $eq: ['$to', '$$contactoId'] }
+                  ]
+                }
+              }
+            },
+            { $sort: { createAt: -1 } },
+            // { $limit: 1 },
+            {
+              $project: {
+                _id: 1,
+                from: 1,
+                to: 1,
+                msg: 1,
+                createAt: 1,
+                status: 1
+              }
+            }
+          ],
+          as: 'ultimoMensaje'
+        }
+      },
+      // Agrupamos los mensajes por contacto
+      {
+        $group: {
+          _id: '$_id',
+          contactos: {
+            $push: {
+              _id: '$contactos._id',
+              username: '$contactos.username',
+              state: '$contactos.state',
+              ultimaConexion: '$contactos.ultimaConexion',
+              ultimoMensaje: {
+                $arrayElemAt: ['$ultimoMensaje', 0]
+              },
+              mensajesNoLeidos: {
+                $reduce: {
+                  input: '$ultimoMensaje',
+                  initialValue: 0,
+                  in: {
+                    $add: [
+                      '$$value',
                       {
-                        $or: [
-                          { $eq: ['$from', userId] },
-                          { $eq: ['$to', userId] }
+                        $cond: [
+                          {
+                            $eq: ['$$this.status', 'unread']
+                          },
+                          1,
+                          0
                         ]
-                      },
-                      {
-                        $or: [
-                          { $eq: ['$from', '$$contacto_id'] },
-                          { $eq: ['$to', '$$contacto_id'] }
-                        ]
-                      },
-                      { $eq: ['$status', 'unread'] }
+                      }
                     ]
                   }
                 }
-              },
-              { $sort: { createAt: -1 } },
-              // { $limit: 1},
-              {
-                $project: {
-                  _id: 1,
-                  from: 1,
-                  to: 1,
-                  contenido: 1,
-                  createAt: 1,
-                  unread: { $cond: [ { $eq: ['$status', 'unread'] }, 1, 0 ] }
-                }
               }
-            ],
-            as: 'mensajes'
-          }
-        },
-      
-        // Proyectamos el resultado
-        {
-          $project: {
-            contacto: {
-              $mergeObjects: [
-                '$$ROOT',
-                {
-                  mensajes: { $arrayElemAt: ['$mensajes', 0] },
-                  unread: { $sum: '$mensajes.unread' }
-                }
-              ]
             }
-            // contacto: {
-            //   _id: '$_id',
-            //   nombre: 1,
-            //   apellido: 1,
-            //   email: 1,
-            //   contactos: 1,
-            //   mensajes: { $arrayElemAt: ['$mensajes', 0] }
-            // }
           }
         }
-      ]);
+      }
       
-      // Retornamos el resultado
-      return result;
+      
+      
+    ]);
+    
+
+    
+    
+    // Retornamos el resultado
+    return result;
     } catch (error) {
       console.error('Error al buscar los contactos y los mensajes:', error.message);
       return { message: 'Error al buscar los contactos y los mensajes' };
